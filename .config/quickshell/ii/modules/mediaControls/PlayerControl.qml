@@ -205,7 +205,7 @@ Item { // Player instance
                     font.pixelSize: Appearance.font.pixelSize.large
                     color: blendedColors.colOnLayer0
                     elide: Text.ElideRight
-                    text: StringUtils.cleanMusicTitle(playerController.player?.trackTitle) || "Untitled"
+                    text: StringUtils.cleanMusicTitle(playerController.player?.trackTitle) || "Translation.tr("Untitled")"
                     animateChange: true
                     animationDistanceX: 6
                     animationDistanceY: 0

@@ -320,7 +320,7 @@ Variants {
                     }
                     StyledText {
                         Layout.fillWidth: false
-                        text: "Locked"
+                        text: Translation.tr("Locked")
                         color: bgRoot.colText
                         font.pixelSize: Appearance.font.pixelSize.larger
                         style: Text.Raised
