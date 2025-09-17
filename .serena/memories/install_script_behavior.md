@@ -11,18 +11,37 @@ La funzione `v()` in `scriptdata/functions` gestisce l'esecuzione con conferma q
 
 ## Sezioni di Sovrascrittura .config/
 
-### MISC Section (loop rsync)
+### MISC Section (loop rsync) - MODIFICATA
 ```bash
-for i in $(find .config/ -mindepth 1 -maxdepth 1 ! -name 'fish' ! -name 'hypr' -exec basename {} \;); do
+for i in $(find .config/ -mindepth 1 -maxdepth 1 ! -name 'fish' ! -name 'hypr' ! -name 'kitty' ! -name 'nvim' ! -name 'mpv' ! -name 'zshrc.d' ! -name 'dolphinrc' ! -name 'kdeglobals' ! -name 'konsolerc' ! -name 'chrome-flags.conf' ! -name 'code-flags.conf' ! -name 'starship.toml' -exec basename {} \;); do
   if [ -d ".config/$i" ];then v rsync -av --delete ".config/$i/" "$XDG_CONFIG_HOME/$i/"
   elif [ -f ".config/$i" ];then v rsync -av ".config/$i" "$XDG_CONFIG_HOME/$i"
   fi
 done
 ```
 
-**Comportamento**: `v()` chiede conferma **individualmente per ogni directory/file** trovato in `.config/` (esclusi fish e hypr).
+**Comportamento**: `v()` chiede conferma **individualmente per ogni directory/file** trovato in `.config/` (con esclusioni personalizzate).
 
-**Directory tipiche**: kitty, nvim, quickshell, fontconfig, mpv, fcitx5, foot, fuzzel, Kvantum, qt5ct, qt6ct, wlogout, xdg-desktop-portal, kde-material-you-colors, matugen, zshrc.d
+**Directory che VERRANNO installate**: 
+- quickshell (interfaccia widget - ESSENZIALE)
+- fontconfig (font progetto - ESSENZIALE per aspetto corretto)
+- Kvantum, qt5ct, qt6ct (temi Qt)
+- fuzzel (launcher)
+- wlogout (menu logout)
+- fcitx5 (input method)
+- foot (terminale alternativo)
+- matugen (generatore colori)
+- xdg-desktop-portal (portali desktop)
+- kde-material-you-colors (temi KDE)
+
+**Directory ESCLUSE (mantieni configurazioni esistenti)**:
+- kitty (terminale)
+- nvim (editor)
+- mpv (media player)
+- zshrc.d (configurazioni zsh)
+- dolphinrc, kdeglobals, konsolerc (configurazioni KDE)
+- chrome-flags.conf, code-flags.conf (flag browser/editor)
+- starship.toml (prompt shell)
 
 ### FISH Section
 ```bash
@@ -38,7 +57,7 @@ v rsync -av --delete --exclude '/custom' --exclude '/hyprlock.conf' --exclude '/
 
 ## Conseguenze Skip (s)
 Se si salta una sezione:
-- **MISC**: Interfaccia Quickshell, temi, colori non funzionano
+- **MISC**: Interfaccia Quickshell, temi, colori, font non funzionano
 - **FISH**: Shell non configurata
 - **HYPRLAND**: Compositor non configurato correttamente
 
@@ -47,3 +66,14 @@ Lo script già gestisce file esistenti:
 - **hyprland.conf**: Rinomina in .old se primo run, altrimenti non sovrascrive
 - **hypridle.conf/hyprlock.conf**: Crea .new se esistono
 - **custom/**: Non sovrascrive se esiste
+
+## Font del Progetto
+Con fontconfig incluso, verranno installati i font specifici:
+- Rubik (interfaccia principale)
+- Gabarito (titoli)
+- JetBrains Mono NF (monospace/icone)
+- Material Symbols Rounded (icone)
+- Readex Pro (lettura)
+- Space Grotesk (espressivo)
+
+Questo garantisce che l'interfaccia Quickshell appaia identica alle screenshot originali.
