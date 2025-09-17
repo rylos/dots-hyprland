@@ -92,7 +92,7 @@ Singleton {
                     property bool enableQtApps: true
                     property bool enableTerminal: true
                     property JsonObject terminalGenerationProps: JsonObject {
-                        property real harmony: 0.8
+                        property real harmony: 0.6
                         property real harmonizeThreshold: 100
                         property real termFgBoost: 0.35
                         property bool forceDarkMode: false
@@ -134,6 +134,13 @@ Singleton {
                     property bool enableWorkspace: true
                     property real workspaceZoom: 1.07 // Relative to your screen, not wallpaper size
                     property bool enableSidebar: true
+                }
+                property JsonObject blur: JsonObject {
+                    property bool enable: true
+                    property int radius: 100
+                    property bool centerClock: true
+                    property bool showLockedText: true
+                    property real extraZoom: 1.1
                 }
                 property string quote: ""
                 property bool hideWhenFullscreen: true
@@ -331,7 +338,11 @@ Singleton {
                     property int longBreak: 900
                 }
             }
-
+            
+            property JsonObject wallpaperSelector: JsonObject {
+                property bool useSystemFileDialog: false
+            }
+            
             property JsonObject windows: JsonObject {
                 property bool showTitlebar: true // Client-side decoration for shell apps
                 property bool centerTitle: true
