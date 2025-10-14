@@ -21,6 +21,9 @@ Singleton {
         entry: a
     }))
     function fuzzyQuery(search: string): var {
+        if (search.trim() === "") {
+            return entries;
+        }
         if (root.sloppySearch) {
             const results = entries.slice(0, 100).map(str => ({
                 entry: str,
@@ -93,6 +96,18 @@ Singleton {
 
     function deleteEntry(entry) {
         deleteProc.deleteEntry(entry);
+    }
+
+    Process {
+        id: wipeProc
+        command: [root.cliphistBinary, "wipe"]
+        onExited: (exitCode, exitStatus) => {
+            root.refresh();
+        }
+    }
+
+    function wipe() {
+        wipeProc.running = true;
     }
 
     Connections {

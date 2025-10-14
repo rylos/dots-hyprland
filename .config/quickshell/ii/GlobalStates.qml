@@ -1,5 +1,5 @@
 import qs.modules.common
-import qs
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
@@ -26,6 +26,13 @@ Singleton {
     property bool superDown: false
     property bool superReleaseMightTrigger: true
     property bool workspaceShowNumbers: false
+
+    onSidebarRightOpenChanged: {
+        if (GlobalStates.sidebarRightOpen) {
+            Notifications.timeoutAll();
+            Notifications.markAllRead();
+        }
+    }
 
     property real screenZoom: 1
     onScreenZoomChanged: {

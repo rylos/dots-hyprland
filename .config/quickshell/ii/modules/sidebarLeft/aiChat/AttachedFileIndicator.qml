@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell.Io
-import qs
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -125,13 +124,12 @@ Rectangle {
             sourceComponent: Item {
                 implicitHeight: root.imageHeight * root.scale
                 implicitWidth: imagePreview.implicitWidth
-                Image {
+                StyledImage {
                     id: imagePreview
                     anchors.fill: parent
                     source: Qt.resolvedUrl(root.filePath)
                     fillMode: Image.PreserveAspectFit
                     antialiasing: true
-                    asynchronous: true
                     width: root.imageWidth * root.scale
                     height: root.imageHeight * root.scale
                     sourceSize.width: root.imageWidth * root.scale

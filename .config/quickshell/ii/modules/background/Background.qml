@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import qs
 import qs.services
 import qs.modules.common
-import qs.modules.common.models
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
 import QtQuick
@@ -14,6 +13,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
+import "./cookieClock"
+
 Variants {
     id: root
     readonly property bool fixedClockPosition: Config.options.background.clock.fixedPosition
@@ -22,6 +23,8 @@ Variants {
     readonly property real clockSizePadding: 20
     readonly property real screenSizePadding: 50
     readonly property string clockStyle: Config.options.background.clock.style
+    readonly property bool showCookieQuote: Config.options.background.showQuote && Config.options.background.quote !== "" && !GlobalStates.screenLocked && Config.options.background.clock.style === "cookie"
+    readonly property real clockParallaxFactor: Math.max(0, Math.min(1, Config.options.background.parallax.clockFactor)) // 0 = full parallax, 1 = no parallax
     model: Quickshell.screens
 
     PanelWindow {
@@ -42,7 +45,12 @@ Variants {
         // Wallpaper
         property bool wallpaperIsVideo: Config.options.background.wallpaperPath.endsWith(".mp4") || Config.options.background.wallpaperPath.endsWith(".webm") || Config.options.background.wallpaperPath.endsWith(".mkv") || Config.options.background.wallpaperPath.endsWith(".avi") || Config.options.background.wallpaperPath.endsWith(".mov")
         property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
-        property bool wallpaperSafetyTriggered: Config.options.background.wallpaperSafety.enable && (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.background.wallpaperSafety.triggerCondition.wallpaperKeywords) && CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.background.wallpaperSafety.triggerCondition.networkNameKeywords))
+        property bool wallpaperSafetyTriggered: {
+            const enabled = Config.options.workSafety.enable.wallpaper
+            const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords))
+            const sensitiveNetwork = (CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords))
+            return enabled && sensitiveWallpaper && sensitiveNetwork;
+        }
         property real wallpaperToScreenRatio: Math.min(wallpaperWidth / screen.width, wallpaperHeight / screen.height)
         property real preferredWallpaperScale: Config.options.background.parallax.workspaceZoom
         property real effectiveWallpaperScale: 1 // Some reasonable init value, to be updated
@@ -147,7 +155,7 @@ Variants {
             property int contentHeight: 300
             property int horizontalPadding: bgRoot.movableXSpace
             property int verticalPadding: bgRoot.movableYSpace
-            command: [Quickshell.shellPath("scripts/images/least_busy_region.py"), "--screen-width", Math.round(bgRoot.screen.width / bgRoot.effectiveWallpaperScale), "--screen-height", Math.round(bgRoot.screen.height / bgRoot.effectiveWallpaperScale), "--width", contentWidth, "--height", contentHeight, "--horizontal-padding", horizontalPadding, "--vertical-padding", verticalPadding, path
+            command: [Quickshell.shellPath("scripts/images/least-busy-region-venv.sh"), "--screen-width", Math.round(bgRoot.screen.width / bgRoot.effectiveWallpaperScale), "--screen-height", Math.round(bgRoot.screen.height / bgRoot.effectiveWallpaperScale), "--width", contentWidth, "--height", contentHeight, "--horizontal-padding", horizontalPadding, "--vertical-padding", verticalPadding, path
                 // "--visual-output",
                 ,]
             stdout: StdioCollector {
@@ -170,16 +178,11 @@ Variants {
             anchors.fill: parent
             clip: true
 
-            Image {
+            StyledImage {
                 id: wallpaper
                 visible: opacity > 0 && !blurLoader.active
                 opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
-                Behavior on opacity {
-                    animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
-                }
                 cache: false
-                asynchronous: true
-                retainWhileLoading: true
                 smooth: false
                 // Range = groups that workspaces span on
                 property int chunkSize: Config?.options.bar.workspaces.shown ?? 10
@@ -265,8 +268,16 @@ Variants {
                     top: wallpaper.top
                     horizontalCenter: undefined
                     verticalCenter: undefined
-                    leftMargin: bgRoot.movableXSpace + ((root.fixedClockPosition ? root.fixedClockX : bgRoot.clockX * bgRoot.effectiveWallpaperScale) - implicitWidth / 2)
-                    topMargin: bgRoot.movableYSpace + ((root.fixedClockPosition ? root.fixedClockY : bgRoot.clockY * bgRoot.effectiveWallpaperScale) - implicitHeight / 2)
+                    leftMargin: {
+                        const clockXOnWallpaper = bgRoot.movableXSpace + ((root.fixedClockPosition ? root.fixedClockX : bgRoot.clockX * bgRoot.effectiveWallpaperScale) - implicitWidth / 2)
+                        const moveBack = (wallpaper.effectiveValueX * 2 * bgRoot.movableXSpace) * (1 - root.clockParallaxFactor);
+                        return clockXOnWallpaper + moveBack;
+                    }
+                    topMargin: {
+                        const clockYOnWallpaper = bgRoot.movableYSpace + ((root.fixedClockPosition ? root.fixedClockY : bgRoot.clockY * bgRoot.effectiveWallpaperScale) - implicitHeight / 2)
+                        const moveBack = (wallpaper.effectiveValueY * 2 * bgRoot.movableYSpace) * (1 - root.clockParallaxFactor);
+                        return clockYOnWallpaper + moveBack;
+                    }
                     Behavior on leftMargin {
                         animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
                     }
@@ -295,9 +306,7 @@ Variants {
                         easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
                     }
                 }
-                sourceComponent: ColumnLayout {
-                    spacing: 8
-
+                sourceComponent: Column {
                     Loader {
                         id: digitalClockLoader
                         visible: root.clockStyle === "digital"
@@ -316,7 +325,7 @@ Variants {
                             }
                             StyledText {
                                 // Somehow gets fucked up if made a ClockText???
-                                visible: Config.options.background.quote.length > 0
+                                visible: Config.options.background.showQuote && Config.options.background.quote.length > 0
                                 Layout.fillWidth: true
                                 horizontalAlignment: bgRoot.textHorizontalAlignment
                                 font {
@@ -335,11 +344,19 @@ Variants {
 
                     Loader {
                         id: cookieClockLoader
-                        Layout.alignment: Qt.AlignHCenter
-                        visible: root.clockStyle === "cookie"
+                        visible: root.clockStyle === "cookie" 
                         active: visible
                         sourceComponent: CookieClock {}
                     }
+
+                    Loader {
+                        id: cookieQuoteLoader
+                        visible: root.showCookieQuote
+                        active: visible
+                        sourceComponent: CookieQuote {}
+                        anchors.horizontalCenter: cookieClockLoader.horizontalCenter
+                    }
+                    
                 }
 
                 Item {
@@ -394,13 +411,13 @@ Variants {
                                 id: safetyStatusText
                                 shown: bgRoot.wallpaperSafetyTriggered
                                 statusIcon: "hide_image"
-                                statusText: qsTr("Wallpaper safety enforced")
+                                statusText: Translation.tr("Wallpaper safety enforced")
                             }
                             ClockStatusText {
                                 id: lockStatusText
                                 shown: GlobalStates.screenLocked && Config.options.lock.showLockedText
                                 statusIcon: "lock"
-                                statusText: qsTr("Locked")
+                                statusText: Translation.tr("Locked")
                             }
                             Item {
                                 Layout.fillWidth: bgRoot.textHorizontalAlignment !== Text.AlignRight
@@ -413,7 +430,7 @@ Variants {
         }
     }
 
-    // Components
+    // ComponentsCookieClock {}
     component ClockText: StyledText {
         Layout.fillWidth: true
         horizontalAlignment: bgRoot.textHorizontalAlignment
@@ -427,7 +444,7 @@ Variants {
         styleColor: Appearance.colors.colShadow
         animateChange: true
     }
-    component ClockStatusText: RowLayout {
+    component ClockStatusText: Row {
         id: statusTextRow
         property alias statusIcon: statusIconWidget.text
         property alias statusText: statusTextWidget.text
@@ -438,10 +455,10 @@ Variants {
         Behavior on opacity {
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
-        Layout.fillWidth: false
+        spacing: 4
         MaterialSymbol {
             id: statusIconWidget
-            Layout.fillWidth: false
+            anchors.verticalCenter: statusTextRow.verticalCenter
             iconSize: Appearance.font.pixelSize.huge
             color: statusTextRow.textColor
             style: Text.Raised
@@ -449,8 +466,8 @@ Variants {
         }
         ClockText {
             id: statusTextWidget
-            Layout.fillWidth: false
             color: statusTextRow.textColor
+            anchors.verticalCenter: statusTextRow.verticalCenter
             font {
                 family: Appearance.font.family.main
                 pixelSize: Appearance.font.pixelSize.large

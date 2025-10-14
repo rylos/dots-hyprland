@@ -1,7 +1,6 @@
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
-import qs
 import QtQuick
 import QtQuick.Layouts
 
@@ -14,11 +13,12 @@ StyledPopup {
         spacing: 4
 
         // Header
-        RowLayout {
+        Row {
             id: header
             spacing: 5
 
             MaterialSymbol {
+                anchors.verticalCenter: parent.verticalCenter
                 fill: 0
                 font.weight: Font.Medium
                 text: "battery_android_full"
@@ -27,6 +27,7 @@ StyledPopup {
             }
 
             StyledText {
+                anchors.verticalCenter: parent.verticalCenter
                 text: "Battery"
                 font {
                     weight: Font.Medium

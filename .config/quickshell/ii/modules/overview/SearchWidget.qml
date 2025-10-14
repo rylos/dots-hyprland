@@ -20,20 +20,10 @@ Item { // Wrapper
     implicitHeight: searchWidgetContent.implicitHeight + Appearance.sizes.elevationMargin * 2
 
     property string mathResult: ""
-
-    function disableExpandAnimation() {
-        searchWidthBehavior.enabled = false;
-    }
-
-    function cancelSearch() {
-        searchInput.selectAll();
-        root.searchingText = "";
-        searchWidthBehavior.enabled = true;
-    }
-
-    function setSearchingText(text) {
-        searchInput.text = text;
-        root.searchingText = text;
+    property bool clipboardWorkSafetyActive: {
+        const enabled = Config.options.workSafety.enable.clipboard;
+        const sensitiveNetwork = (StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords))
+        return enabled && sensitiveNetwork;
     }
 
     property var searchActions: [
@@ -52,7 +42,7 @@ Item { // Wrapper
         {
             action: "konachanwallpaper",
             execute: () => {
-                Quickshell.execDetached([Quickshell.shellPath("scripts/colors/random_konachan_wall.sh")]);
+                Quickshell.execDetached([Quickshell.shellPath("scripts/colors/random/random_konachan_wall.sh")]);
             }
         },
         {
@@ -91,10 +81,37 @@ Item { // Wrapper
                 GlobalStates.wallpaperSelectorOpen = true;
             }
         },
+        {
+            action: "wipeclipboard",
+            execute: () => {
+                Cliphist.wipe();
+            }
+        },
     ]
 
     function focusFirstItem() {
         appResults.currentIndex = 0;
+    }
+
+    function disableExpandAnimation() {
+        searchWidthBehavior.enabled = false;
+    }
+
+    function cancelSearch() {
+        searchInput.selectAll();
+        root.searchingText = "";
+        searchWidthBehavior.enabled = true;
+    }
+
+    function setSearchingText(text) {
+        searchInput.text = text;
+        root.searchingText = text;
+    }
+
+    function containsUnsafeLink(entry) {
+        if (entry == undefined) return false;
+        const unsafeKeywords = Config.options.workSafety.triggerCondition.linkKeywords;
+        return StringUtils.stringListContainsSubstring(entry.toLowerCase(), unsafeKeywords);
     }
 
     Timer {
@@ -170,6 +187,7 @@ Item { // Wrapper
                 searchInput.text = searchInput.text.slice(0, searchInput.cursorPosition) + event.text + searchInput.text.slice(searchInput.cursorPosition);
                 searchInput.cursorPosition += 1;
                 event.accepted = true;
+                root.focusFirstItem();
             }
         }
     }
@@ -298,9 +316,7 @@ Item { // Wrapper
 
                 model: ScriptModel {
                     id: model
-                    onValuesChanged: {
-                        root.focusFirstItem();
-                    }
+                    objectProp: "key"
                     values: {
                         // Search results are handled here
                         ////////////////// Skip? //////////////////
@@ -310,13 +326,20 @@ Item { // Wrapper
                         ///////////// Special cases ///////////////
                         if (root.searchingText.startsWith(Config.options.search.prefix.clipboard)) {
                             // Clipboard
-                            const searchString = root.searchingText.slice(Config.options.search.prefix.clipboard.length);
-                            return Cliphist.fuzzyQuery(searchString).map(entry => {
+                            const searchString = StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.clipboard);
+                            return Cliphist.fuzzyQuery(searchString).map((entry, index, array) => {
+                                const mightBlurImage = Cliphist.entryIsImage(entry) && root.clipboardWorkSafetyActive;
+                                let shouldBlurImage = mightBlurImage;
+                                if (mightBlurImage) {
+                                    shouldBlurImage = shouldBlurImage && (containsUnsafeLink(array[index - 1]) || containsUnsafeLink(array[index + 1]));
+                                }
+                                const type = `#${entry.match(/^\s*(\S+)/)?.[1] || ""}`
                                 return {
+                                    key: type,
                                     cliphistRawString: entry,
                                     name: StringUtils.cleanCliphistEntry(entry),
                                     clickActionName: "",
-                                    type: `#${entry.match(/^\s*(\S+)/)?.[1] || ""}`,
+                                    type: type,
                                     execute: () => {
                                         Cliphist.copy(entry)
                                     },
@@ -335,17 +358,21 @@ Item { // Wrapper
                                                 Cliphist.deleteEntry(entry);
                                             }
                                         }
-                                    ]
+                                    ],
+                                    blurImage: shouldBlurImage,
+                                    blurImageText: Translation.tr("Work safety")
                                 };
                             }).filter(Boolean);
                         }
                         else if (root.searchingText.startsWith(Config.options.search.prefix.emojis)) {
                             // Clipboard
-                            const searchString = root.searchingText.slice(Config.options.search.prefix.emojis.length);
+                            const searchString = StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.emojis);
                             return Emojis.fuzzyQuery(searchString).map(entry => {
+                                const emoji = entry.match(/^\s*(\S+)/)?.[1] || ""
                                 return {
+                                    key: emoji,
                                     cliphistRawString: entry,
-                                    bigText: entry.match(/^\s*(\S+)/)?.[1] || "",
+                                    bigText: emoji,
                                     name: entry.replace(/^\s*\S+\s+/, ""),
                                     clickActionName: "",
                                     type: "Emoji",
@@ -359,6 +386,7 @@ Item { // Wrapper
                         ////////////////// Init ///////////////////
                         nonAppResultsTimer.restart();
                         const mathResultObject = {
+                            key: `Math result: ${root.mathResult}`,
                             name: root.mathResult,
                             clickActionName: Translation.tr("Copy"),
                             type: Translation.tr("Math result"),
@@ -368,14 +396,22 @@ Item { // Wrapper
                                 Quickshell.clipboardText = root.mathResult;
                             }
                         };
+                        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.app)).map(entry => {
+                            entry.clickActionName = Translation.tr("Launch");
+                            entry.type = Translation.tr("App");
+                            entry.key = entry.execute
+                            return entry;
+                        })
                         const commandResultObject = {
-                            name: searchingText.replace("file://", ""),
+                            key: `cmd ${root.searchingText}`,
+                            name: StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.shellCommand).replace("file://", ""),
                             clickActionName: Translation.tr("Run"),
                             type: Translation.tr("Run command"),
                             fontType: "monospace",
                             materialSymbol: 'terminal',
                             execute: () => {
                                 let cleanedCommand = root.searchingText.replace("file://", "");
+                                cleanedCommand = StringUtils.cleanPrefix(cleanedCommand, Config.options.search.prefix.shellCommand);
                                 if (cleanedCommand.startsWith(Config.options.search.prefix.shellCommand)) {
                                     cleanedCommand = cleanedCommand.slice(Config.options.search.prefix.shellCommand.length);
                                 }
@@ -383,15 +419,13 @@ Item { // Wrapper
                             }
                         };
                         const webSearchResultObject = {
-                            name: root.searchingText,
+                            key: `website ${root.searchingText}`,
+                            name: StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.webSearch),
                             clickActionName: Translation.tr("Search"),
                             type: Translation.tr("Search the web"),
                             materialSymbol: 'travel_explore',
                             execute: () => {
-                                let query = root.searchingText;
-                                if (query.startsWith(Config.options.search.prefix.webSearch)) {
-                                    query = query.slice(Config.options.search.prefix.webSearch.length);
-                                }
+                                let query = StringUtils.cleanPrefix(root.searchingText, Config.options.search.prefix.webSearch);
                                 let url = Config.options.search.engineBaseUrl + query;
                                 for (let site of Config.options.search.excludedSites) {
                                     url += ` -site:${site}`;
@@ -403,6 +437,7 @@ Item { // Wrapper
                             const actionString = `${Config.options.search.prefix.action}${action.action}`;
                             if (actionString.startsWith(root.searchingText) || root.searchingText.startsWith(actionString)) {
                                 return {
+                                    key: `Action ${actionString}`,
                                     name: root.searchingText.startsWith(actionString) ? root.searchingText : actionString,
                                     clickActionName: Translation.tr("Run"),
                                     type: Translation.tr("Action"),
@@ -430,11 +465,7 @@ Item { // Wrapper
                         }
 
                         //////////////// Apps //////////////////
-                        result = result.concat(AppSearch.fuzzyQuery(root.searchingText).map(entry => {
-                            entry.clickActionName = Translation.tr("Launch");
-                            entry.type = Translation.tr("App");
-                            return entry;
-                        }));
+                        result = result.concat(appResultObjects);
 
                         ////////// Launcher actions ////////////
                         result = result.concat(launcherActionObjects);
@@ -456,7 +487,15 @@ Item { // Wrapper
                     anchors.left: parent?.left
                     anchors.right: parent?.right
                     entry: modelData
-                    query: root.searchingText.startsWith(Config.options.search.prefix.clipboard) ? root.searchingText.slice(Config.options.search.prefix.clipboard.length) : root.searchingText
+                    query: StringUtils.cleanOnePrefix(root.searchingText, [
+                        Config.options.search.prefix.action,
+                        Config.options.search.prefix.app,
+                        Config.options.search.prefix.clipboard,
+                        Config.options.search.prefix.emojis,
+                        Config.options.search.prefix.math,
+                        Config.options.search.prefix.shellCommand,
+                        Config.options.search.prefix.webSearch
+                    ])
                 }
             }
         }
